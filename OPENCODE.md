@@ -149,3 +149,100 @@ opencode providers logout anthropic      # حذف المفتاح
 - الأحسن: متبعتش المفتاح في الشات — حطّه بنفسك بـ `export` أو `opencode providers login`.
   لو بعتّه، غيّره/اعمله revoke بعد التجربة.
 
+---
+
+# 🧪 تجربة مزوّد cleanapis + OmniRoute (٢٤ أكتوبر ٢٠٢٦)
+
+## 1) مزوّد cleanapis — فشل
+
+```bash
+curl https://cleanapis.com/v1/models -H "Authorization: Bearer <KEY>"   # 200 ✅
+curl https://cleanapis.com/v1/chat/completions -d '{"model":"kimi-k3",...}'  # 402 ❌
+```
+
+- الـ endpoint والمفتاح بيعدّوا، والكتالوج فيه **33 موديل** منهم `kimi-k3` و `gpt-5.6-luna`
+  (`gpt-5.6-sol/terra`, `claude-opus-5.5`, `grok-4.6`, `deepseek-v4-pro-max`, `qwen3.8-max` …).
+- أي محاولة توليد بترجع:
+  `402 {"code":"insufficient_quota","message":"Billing verification failed."}`
+  على كل الموديلات (جرّبت كمان `gemma-2-2b` و `glm-5.3`) → **المشكلة في الحساب/الدفع مش في الموديل**.
+- يعني المفتاح شكله valid بس مفيش عليه رصيد/الفاتورة مش متأكدة.
+
+## 2) OmniRoute — اشتغل، بس الـ keyless محدود
+
+```bash
+npm install -g --prefix /workspace/.tools omniroute      # 3.8.52 (~2.8GB بعد التثبيت)
+export PATH=/workspace/.tools/bin:$PATH
+OMNIROUTE_MEMORY_MB=1536 omniroute serve --headless --no-open --port 20128
+# API: http://localhost:20128/v1   (REQUIRE_API_KEY=false افتراضيًا محليًا)
+```
+
+- السيرفر شغال، استهلاك الذاكرة ~130MB في وضع headless، و`/v1/chat/completions` بيرد.
+- **بدون أي حساب** المزوّد الوحيد المتاح هو **AI Horde** (`noauth`):
+
+```bash
+omniroute providers add aihorde --no-credential --json
+curl -s http://127.0.0.1:20128/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"aihorde/google/gemma-4-31b","messages":[{"role":"user","content":"Reply PONG"}]}'
+# → 200 {...,"model":"google/gemma-4-31b","content":"PONG"} ✅
+```
+
+- باقي المزوّدين (pollinations / logfare / nara / llm7 / opencode-zen / gemini / groq …)
+  محتاجين credential: `providers add pollinations --allow-no-credential` بيرجع `✖ Invalid request`.
+- ⚠️ **AI Horde مش بينفع كـ agent**: موديلاته مش بتدعم tool calling، فأي تشغيل من opencode
+  بيرجع: `Model "google/gemma-4-31b" does not support tool calling` (حتى بعد `"tool_call": false`).
+  ينفع شات عادي بس.
+- المسار المجاني اللي فيه `kimi-k3` و `gpt-5.6-luna` هو مزوّد **logfare** جوه OmniRoute —
+  بيدي مفتاح API مجاني فورًا من logfare.ai/register (كل request بيتسجل للأبحاث)،
+  يعني محتاج تسجيل حساب بإيميلك.
+
+## 3) أقوى موديل مجاني شغال فعلاً (بمقارنة عملية)
+
+كل الموديلات دي اشتغلت **بدون أي مفتاح** في opencode، وكلها عدّت مهمتين برمجيتين
+(سكربت + تشغيل + unittest):
+
+| الموديل | Context | Output | مدة المهمة | نتيجة الاختبارات |
+|---|---|---|---|---|
+| `opencode/beam-free` | 1,048,576 | 131,072 | **5–12s** ⚡ | ✅ 4/4 |
+| `opencode/nemotron-3-ultra-free` | 1,000,000 | 128,000 | 16–19s | ✅ 4/4 |
+| `opencode/nemotron-3.5-super-vl-free` | 1,048,576 | 131,072 | 25s | ✅ 4/4 (ويدعم صور/PDF) |
+| `opencode/deepseek-v4.1-flash-free` | 200,000 | 32,000 | 6s | ✅ |
+| `opencode/glm-5.3-flash-free` | 200,000 | 32,000 | 6s | ✅ |
+
+**الافتراضي المضبوط حاليًا:** `opencode/nemotron-3.5-super-vl-free`
+(أحدث جيل + سياق 1M + multimodal). للسرعة استخدم `opencode/beam-free`.
+
+## 4) OmniRoute كـ provider جوه opencode
+
+`~/.config/opencode/opencode.jsonc`:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "opencode/nemotron-3.5-super-vl-free",
+  "provider": {
+    "omniroute": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "OmniRoute (local gateway)",
+      "options": { "baseURL": "http://127.0.0.1:20128/v1", "apiKey": "local-no-auth" },
+      "models": {
+        "aihorde/google/gemma-4-31b": { "name": "Gemma 4 31B (AI Horde, keyless)", "tool_call": false }
+      }
+    }
+  }
+}
+```
+
+`opencode models omniroute` بيعرض الموديلات ✅ — بس unfit للـ agent بسبب غياب tool calling.
+
+## 5) إعادة التثبيت لو الساندبوكس اتمسح
+
+```bash
+npm install -g --prefix /workspace/.tools --allow-scripts=omniroute,keytar,onnxruntime-node,@parcel/watcher,@swc/core,protobufjs,esbuild omniroute
+export PATH=/workspace/.tools/bin:$PATH
+OMNIROUTE_MEMORY_MB=1536 omniroute serve --headless --no-open --port 20128
+# أو بدون --headless لو عايز الداشبورد على http://localhost:20128
+```
+
+> 🔐 المفتاح اللي اتبعت في الشات **مش متخزن** في أي ملف هنا؛ الأفضل تعمله revoke/rotate
+> لأنه اتكتب في محادثة.
