@@ -286,3 +286,53 @@ authorization: Bearer cc_THIS_IS_NOT_A_REAL_KEY_0000
 عبّي/أكّد طريقة الدفع في حساب cleanapis (أو خُد مفتاح جديد من حساب متحقق)، وبعدها
 المزوّد هيتوصل في opencode بالطريقة الموثقة فوق (npm `@ai-sdk/openai-compatible` +
 `baseURL: https://cleanapis.com/v1`). لحد ما ده يحصل، الشغال فعلاً هو free tier بتاع opencode.
+
+---
+
+# ✅ مزوّد Dahl (inference.dahl.global) — شغال
+
+```jsonc
+"dahl": {
+  "npm": "@ai-sdk/openai-compatible",
+  "name": "Dahl inference (gonka/vLLM)",
+  "options": { "baseURL": "https://inference.dahl.global/v1", "apiKey": "dahl_..." },
+  "models": {
+    "zai-org/GLM-5.3-Flash": { "name": "GLM-5.3-Flash (Dahl)" },
+    "MiniMaxAI/MiniMax-M2.7": { "name": "MiniMax-M2.7 (Dahl)" },
+    "deepseek-ai/DeepSeek-V4-Flash-0731": { "name": "DeepSeek-V4-Flash-0731 (Dahl)" }
+  }
+}
+```
+
+### الكتالوج (3 موديلات بس، سيرفر vLLM/Gonka)
+`zai-org/GLM-5.3-Flash` · `MiniMaxAI/MiniMax-M2.7` · `deepseek-ai/DeepSeek-V4-Flash-0731`
+
+### نتائج التشغيل الحقيقية (opencode agent: كتابة ملف + تنفيذه)
+
+| الموديل | النتيجة | التفاصيل |
+|---|---|---|
+| `MiniMaxAI/MiniMax-M2.7` | ✅ **شغال ونضيف** | 25s، كتب `fib.py` و`sum.py` ونفّذهم صح (34 / 55) — **الافتراضي الحالي** |
+| `zai-org/GLM-5.3-Flash` | ⚠️ شغال بس متقطّع | كتب `fib.py` ونفّذه صح، لكن مرة دخل **doom loop** (`true` متكرر → permission rejected)، ومرة طلّع كلام برّه الموضوع. وكمان بيرجع `429 model_concurrency` كتير |
+| `deepseek-ai/DeepSeek-V4-Flash-0731` | ⚠️ بيعلّق | كتب الملف ونفّذه صح (0..34) وبعدها علّق لحد الـ timeout |
+
+### Tool calling
+مدعوم ✅ (`tool_calls` سليمة بـ args صح) لو بعتّ `tools` + system prompt + `temperature: 0`.
+
+### حدود الخدمة (مهم)
+- الخدمة **free tier بـ concurrency محدودة**: لما الموديل يكون مشغول:
+  ```json
+  429 {"error":{"code":"model_concurrency",
+    "message":"This model is at concurrency capacity. Paid accounts are admitted first.
+     Top up ... — $0.03 per 1M tokens (in + out + cached) on any model."}}
+  ```
+  وبيقولك الموديلات المتاحة بداله في نفس اللحظة.
+- السامبلر على السيرفر بيرجّع أحيانًا تكرار مشوّش (`PONGPONGPONG`، `391What is 17*23?...`)
+  وردود GLM بتبدأ reasoning في `content` — فالأفضل متعتمدش عليه في مهام طويلة.
+- الردود بتخلط `<think>` جوه الـ content (MiniMax/DeepSeek)، فممكن تشوف تفكير الموديل في المخرجات.
+
+### التبديل السريع
+```bash
+opencode run -m dahl/MiniMaxAI/MiniMax-M2.7 "..."        # الافتراضي (مستقر)
+opencode run -m dahl/zai-org/GLM-5.3-Flash "..."         # لو فيه سعة
+opencode run -m opencode/nemotron-3.5-super-vl-free "..."  # free tier بتاع opencode (مستقر دائمًا)
+```
