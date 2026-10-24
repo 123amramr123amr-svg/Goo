@@ -336,3 +336,20 @@ opencode run -m dahl/MiniMaxAI/MiniMax-M2.7 "..."        # الافتراضي (�
 opencode run -m dahl/zai-org/GLM-5.3-Flash "..."         # لو فيه سعة
 opencode run -m opencode/nemotron-3.5-super-vl-free "..."  # free tier بتاع opencode (مستقر دائمًا)
 ```
+
+---
+
+# 📱 برومبت بناء APK
+
+البرومبت الجاهز في [`PROMPT-APK.md`](./PROMPT-APK.md) — تطبيق أندرويد (Flutter) اسمه
+**AI Studio**: يضيف أي مزوّد AI بـ Base URL + API Key + موديل، ويولّد **شات + صور + فيديو**،
+مع Jobs في الخلفية (WorkManager)، تخزين مشفّر للمفاتيح، عربي RTL/إنجليزي، وبناء APK
+(أو GitHub Actions fallback لو الـ toolchain مش متاح).
+
+```bash
+mkdir -p /workspace/app && cd /workspace/app
+opencode run "$(cat /workspace/PROMPT-APK.md)"
+```
+
+> ملاحظة: البيئة هنا فيها Node/Bun/Python بس — **مفيش Java ولا Flutter ولا Android SDK**،
+> فالبرومبت بيسمح للموديل يثبّت toolchain أو يسلّم workflow يبني الـ APK على CI.
