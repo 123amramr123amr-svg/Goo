@@ -246,3 +246,43 @@ OMNIROUTE_MEMORY_MB=1536 omniroute serve --headless --no-open --port 20128
 
 > 🔐 المفتاح اللي اتبعت في الشات **مش متخزن** في أي ملف هنا؛ الأفضل تعمله revoke/rotate
 > لأنه اتكتب في محادثة.
+
+---
+
+# 🔬 سويب كامل على مزوّد cleanapis (33 موديل × مفتاح واحد)
+
+الطريقة: `POST /v1/chat/completions` لكل موديل بـ `max_tokens=16`
+(5 طلبات متوازية، وبعدها إعادة محاولة هادئة للموديلات اللي رجّعت 429).
+
+**النتيجة: 0 موديل شغال من 33.**
+
+| الحالة | العدد | الموديلات |
+|---|---|---|
+| `402 insufficient_quota` (Billing verification failed) | 28 | claude-fable-5, claude-fable-5.1, claude-mythos-preview, claude-opus-4.6, claude-opus-4.7, claude-opus-4.8, claude-opus-5, claude-opus-5.5, claude-sonnet-5, deepseek-v4-flash-0731, deepseek-v4-pro-0813, deepseek-v4-pro-max, gemini-3.1-pro, gemini-3.6-flash, gemini-3.7-flash, gemma-2-2b, glm-5.2, glm-5.3, gpt-5.5, gpt-5.5-pro, gpt-5.6-luna, gpt-5.6-sol, gpt-5.6-terra, grok-4.5, grok-4.6, kimi-k2.6, kimi-k3, muse-spark-1.1 |
+| `429` Cloudflare **error 1015** في السويب المتوازي → رجعت **402** بعد إعادة المحاولة | 5 | qwen3.7-max, qwen3.8-27b, qwen3.8-max, seed-2.1-pro, seed-2.1-turbo |
+| `200 OK` | **0** | — |
+
+### إثبات إن المفتاح صحيح والمشكلة في الفاتورة
+
+```bash
+# مفتاح غلط (control) → 401
+authorization: Bearer cc_THIS_IS_NOT_A_REAL_KEY_0000
+{"error":{"code":"invalid_api_key","type":"authentication_error"}}   # http=401
+
+# مفتاحك → 402
+{"error":{"code":"insufficient_quota","type":"insufficient_funds"}}   # http=402
+```
+
+يعني: المصادقة بتنجح (المفتاح متسجل ومش ملغي) لكن **الحساب ما عداش التحقق من الدفع**،
+وكل الموديلات (بما فيها الأرخص `gemma-2-2b`) محجوبة. الـ `429/1015` كان rate-limit
+من Cloudflare بسبب الطلبات المتوازية، مش مشكلة موديل.
+
+### كمان اتأكدت إنه:
+- `stream: true` → نفس 402.
+- `/v1/completions` و `/v1/responses` → 404 (الـ API بيوفّر `/v1/chat/completions` و `/v1/models` بس).
+- `/v1/credits`, `/v1/dashboard/billing/*`, `/v1/me`, `/v1/key` → 404 (مفيش نقطة استعلام عن الرصيد).
+
+### الخلاصة العملية
+عبّي/أكّد طريقة الدفع في حساب cleanapis (أو خُد مفتاح جديد من حساب متحقق)، وبعدها
+المزوّد هيتوصل في opencode بالطريقة الموثقة فوق (npm `@ai-sdk/openai-compatible` +
+`baseURL: https://cleanapis.com/v1`). لحد ما ده يحصل، الشغال فعلاً هو free tier بتاع opencode.
