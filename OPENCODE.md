@@ -63,3 +63,89 @@ opencode providers list           # عرض الـ credentials
 
 أو حط مفتاح أي مزوّد في `~/.config/opencode/opencode.jsonc` أو env
 (`ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, ...) وبعدها `opencode models` هيكبر.
+
+---
+
+# 🔑 استخدام مفاتيحك الخاصة (اتجرّب فعليًا على 1.19.4)
+
+أيوه، ينفع تشغّل مفاتيحك جوه opencode. فيه 3 طرق — كلها متأكد منها بالتشغيل:
+
+## 1) متغيرات بيئة (الأسهل والأأمن للأسرار)
+
+```bash
+export ANTHROPIC_API_KEY=sk-ant-...
+opencode models anthropic      # بيطلع موديلات المزوّد
+opencode providers list        # بيعرضها تحت Environment
+opencode run -m anthropic/claude-sonnet-4-5 "مرحبا"
+```
+
+أسماء المتغيرات المتوقعة لكل مزوّد (من models.dev):
+
+| المزوّد | ID | متغيرات البيئة |
+|---|---|---|
+| Anthropic | `anthropic` | `ANTHROPIC_API_KEY` |
+| OpenAI | `openai` | `OPENAI_API_KEY` |
+| Google Gemini | `google` | `GOOGLE_API_KEY` / `GOOGLE_GENERATIVE_AI_API_KEY` / `GEMINI_API_KEY` |
+| OpenRouter | `openrouter` | `OPENROUTER_API_KEY` |
+| Groq | `groq` | `GROQ_API_KEY` |
+| DeepSeek | `deepseek` | `DEEPSEEK_API_KEY` |
+| xAI | `xai` | `XAI_API_KEY` |
+| Mistral | `mistral` | `MISTRAL_API_KEY` |
+| Cerebras | `cerebras` | `CEREBRAS_API_KEY` |
+
+عدد الموديلات المتاحة لكل مزوّد لما المفتاح يكون موجود:
+`openrouter 391` · `openai 51` · `google 38` · `mistral 34` · `anthropic 17`
+· `groq 14` · `xai 13` · `deepseek 4` · `cerebras 2`.
+(مفاتيح OpenRouter مفيدة جدًا لأن مفتاح واحد بيفتح مئات الموديلات.)
+
+## 2) `opencode providers login` (تسجيل تفاعلي)
+
+```bash
+opencode providers login                 # يختار المزوّد والطريقة
+opencode providers login -p anthropic    # يروح على طول لخانة "Enter your API key"
+opencode providers logout anthropic      # حذف المفتاح
+```
+
+- بيكتب المفتاح في `~/.local/share/opencode/auth.json` (نص عادي، chmod 600).
+- الشكل: `{"anthropic":{"type":"api","key":"sk-ant-..."}}`
+- ⚠️ **محتاج تيرمنال تفاعلي حقيقي**؛ الـ pipe (`printf 'key' | opencode providers login`)
+  بيعلّق، فشغّله بنفسك مش من سكربت.
+- بيدعم كمان OAuth لمزوّدين زي GitHub Copilot / Claude / ChatGPT (بيحفظ `type: "oauth"`).
+
+## 3) ملف الـ config (لمزوّد مخصّص أو Base URL مختلف)
+
+`~/.config/opencode/opencode.jsonc` (أو `opencode.json` في جذر المشروع):
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "myprovider": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "My Provider",
+      "options": {
+        "baseURL": "https://api.example.com/v1",
+        "apiKey": "{env:MY_PROVIDER_KEY}"   // أو المفتاح مباشرة (مش مستحب)
+      },
+      "models": { "my-model": { "name": "My Model" } }
+    }
+  }
+}
+```
+
+بعد كده: `opencode models myprovider` → `myprovider/my-model` ✅
+
+ملاحظات من التجربة:
+- الـ key القديم `"provider"` (مفرد) هو اللي شغال في 1.19.4 رغم إن الـ schema بيقول
+  `deprecated`. النسخة الجديدة `"providers"` (جمع) بترجع
+  `Error: Provider not found` في النسخة دي.
+- نفس الفكرة تنفع لأي API متوافق مع OpenAI (Ollama, LM Studio, vLLM, OpenRouter...).
+
+## أمان
+- أي مفتاح بيدخل الساندبوكس بيتخزن على الجهاز (`auth.json` أو env) — والمفروض
+  ميتعملش commit ولا يتحفظ في الريبو.
+- الساندبوكس ممكن يتمسح في أي وقت، فالمفاتيح اللي هتتحط هنا مؤقتة؛ لو عايزها
+  دائمة حطها في `~/.bashrc` أو في config على جهازك.
+- الأحسن: متبعتش المفتاح في الشات — حطّه بنفسك بـ `export` أو `opencode providers login`.
+  لو بعتّه، غيّره/اعمله revoke بعد التجربة.
+
